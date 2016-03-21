@@ -261,6 +261,14 @@ void Classifier::LoadLabels(const string& label_file)
 }
 
 int main(int argc, char** argv) {
+
+    if (argc == 2)
+    {
+        string model_file = argv[1];
+        shared_ptr<Net<float> > net;
+        net.reset(new Net<float>(model_file, TEST));
+        return 0;
+    }
     if (argc != 6) {
         std::cerr << "Usage: " << argv[0]
             << " deploy.prototxt network.caffemodel"
