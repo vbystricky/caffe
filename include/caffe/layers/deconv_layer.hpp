@@ -32,6 +32,11 @@ class DeconvolutionLayer : public BaseConvolutionLayer<Dtype> {
       : BaseConvolutionLayer<Dtype>(param) {}
 
   virtual inline const char* type() const { return "Deconvolution"; }
+  virtual inline DiagonalAffineMap<Dtype> coord_map() {
+      return FilterMap<Dtype>(this->kernel_shape_.cpu_data()[0], this->kernel_shape_.cpu_data()[1],
+          this->stride_.cpu_data()[0], this->stride_.cpu_data()[1],
+          this->pad_.cpu_data()[0], this->pad_.cpu_data()[1]);
+  }
 
  protected:
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,

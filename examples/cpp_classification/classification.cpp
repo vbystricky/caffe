@@ -86,6 +86,7 @@ Classifier::Classifier(const string& model_file,
 
     LoadLabels(label_file);
 }
+
 static bool PairCompare(const std::pair<float, int>& lhs,
     const std::pair<float, int>& rhs) {
     return lhs.first > rhs.first;
@@ -262,11 +263,117 @@ void Classifier::LoadLabels(const string& label_file)
 
 int main(int argc, char** argv) {
 
-    if (argc == 2)
+    if (argc == 3)
     {
+        static const cv::Vec3b label_color[21] =
+        {
+            cv::Vec3b(255, 255, 255), // Background
+            cv::Vec3b(128, 128, 128), // Aeroplane
+            cv::Vec3b(  0,   0, 255), // Bicycle
+            cv::Vec3b(128, 128, 128), // Bird
+            cv::Vec3b(128, 128, 128), // Boat
+            cv::Vec3b(128, 128, 128), // Bottle
+            cv::Vec3b(128, 128, 128), // Bus
+            cv::Vec3b(255,   0,   0), // Car
+            cv::Vec3b(128, 128, 128), // Cat
+            cv::Vec3b(128, 128, 128), // Chair
+            cv::Vec3b(128, 128, 128), // Cow
+            cv::Vec3b(128, 128, 128), // Diningtable
+            cv::Vec3b(128, 128, 128), // Dog
+            cv::Vec3b(128, 128, 128), // Horse
+            cv::Vec3b(  0, 255,   0), // Motorbike
+            cv::Vec3b(255,   0, 255), // Person
+            cv::Vec3b(128, 128, 128), // Pottedplant
+            cv::Vec3b(128, 128, 128), // Sheep
+            cv::Vec3b(128, 128, 128), // Sofa
+            cv::Vec3b(128, 128, 128), // Train
+            cv::Vec3b(128, 128, 128), // Tvmonitor
+        };
         string model_file = argv[1];
+        string trained_file = argv[2];
         shared_ptr<Net<float> > net;
         net.reset(new Net<float>(model_file, TEST));
+        net->CopyTrainedLayersFrom(trained_file);
+
+        Blob<float>* input_layer = net->input_blobs()[0];
+        std::cout << "input layer" << std::endl;
+        std::cout << "  channels:" << input_layer->channels() << std::endl;
+        std::cout << "  width   :" << input_layer->width() << std::endl;
+        std::cout << "  height  :" << input_layer->height() << std::endl;
+        Blob<float>* output_layer = net->output_blobs()[0];
+        std::cout << "output layer" << std::endl;
+        std::cout << "  channels:" << output_layer->channels() << std::endl;
+        std::cout << "  width   :" << output_layer->width() << std::endl;
+        std::cout << "  height  :" << output_layer->height() << std::endl;
+
+        cv::Mat img = cv::imread("D:/work/vbystricky/caffe/test/images/KITTI_05_000883.png", cv::IMREAD_COLOR);
+
+        {
+            //B 104.00698793 G 116.66876762 R 122.67891434
+            cv::Mat img_f; img.convertTo(img_f, CV_32FC3);
+            img_f -= cv::Scalar(104.00698793, 116.66876762, 122.67891434);
+
+            std::vector<cv::Mat> channels;
+            int width = input_layer->width();
+            int height = input_layer->height();
+            float* input_data = input_layer->mutable_cpu_data();
+            for (int i = 0; i < input_layer->channels(); ++i)
+            {
+                cv::Mat channel(height, width, CV_32FC1, input_data);
+                channels.push_back(channel);
+                input_data += width * height;
+            }
+            cv::split(img_f, channels);
+        }
+
+        net->Forward();
+        if (false)
+        {
+            std::vector<cv::Mat> channels;
+            int width = output_layer->width();
+            int height = output_layer->height();
+            const float* output_data = output_layer->cpu_data();
+            for (int i = 0; i < output_layer->channels(); ++i)
+            {
+                cv::Mat channel(height, width, CV_32FC1);
+                memcpy(channel.ptr(0), output_data, width * height * sizeof(float));
+                channels.push_back(channel);
+                output_data += width * height;
+                cv::imshow("channel", channel);
+                cv::waitKey();
+            }
+        }
+        {
+            const int width = output_layer->width();
+            const int height = output_layer->height();
+            const int channels = output_layer->channels();
+
+            cv::Mat labels(height, width, CV_8UC3);
+
+            const int step = width * height;
+            const float* output_data = output_layer->cpu_data();
+            for (int row = 0; row < height; row++)
+            {
+                cv::Vec3b *ptr_label = labels.ptr<cv::Vec3b>(row);
+                for (int col = 0; col < width; col++, output_data++)
+                {
+                    int label_max = 0;
+                    float conf_max = -FLT_MAX;
+                    for (int ch = 1; ch < channels; ch++)
+                    {
+                        if (conf_max < output_data[ch * step])
+                        {
+                            conf_max = output_data[ch];
+                            label_max = ch;
+                        }
+                    }
+                    ptr_label[col] = label_color[label_max];
+                }
+            }
+            cv::addWeighted(img, 0.5, labels, 0.5, 0.0, labels);
+            cv::imshow("labels", labels);
+            cv::waitKey();
+        }
         return 0;
     }
     if (argc != 6) {
